@@ -16,13 +16,10 @@ app.use(express.json())
 let _kv = null
 function getKV() {
   if (!_kv) {
-    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-      throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are not set')
-    }
-    _kv = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    })
+    const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
+    if (!url || !token) throw new Error('Redis credentials not configured')
+    _kv = new Redis({ url, token })
   }
   return _kv
 }
@@ -59,8 +56,10 @@ app.get('/api/me', requireAuth, (req, res) => res.json({ user: req.user.user }))
 
 // Debug endpoint — visit /api/health to check config
 app.get('/api/health', (req, res) => {
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
   res.json({
-    redis: !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN),
+    redis: !!(url && token),
     jwt: !!process.env.JWT_SECRET,
     auth: !!(process.env.AMAI_USERNAME && process.env.AMAI_PASSWORD),
   })
