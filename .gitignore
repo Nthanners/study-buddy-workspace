@@ -13,6 +13,9 @@ backend/.env
 # Personal data — your notes/tasks/journal stay local
 backend/data/
 
+# Claude Code internal files
+.claude/
+
 # Vite / editor caches
 .vite/
 *.local

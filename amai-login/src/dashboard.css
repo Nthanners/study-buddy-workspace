@@ -920,12 +920,19 @@
 
 .waifu-float {
   animation: waifuBob 5s ease-in-out infinite;
-  filter: drop-shadow(0 4px 22px rgba(124,92,191,0.4));
+  filter: drop-shadow(0 6px 28px rgba(124,92,191,0.45));
+}
+
+.waifu-img {
+  display: block;
+  width: 220px;
+  height: auto;
+  object-fit: contain;
 }
 
 @keyframes waifuBob {
   0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-7px); }
+  50%       { transform: translateY(-8px); }
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */
