@@ -907,6 +907,27 @@
   padding-top: 0.85rem;
 }
 
+/* ── Waifu Widget ────────────────────────────────────────────── */
+
+.waifu-widget {
+  position: fixed;
+  bottom: 0;
+  right: 1.5rem;
+  z-index: 40;
+  pointer-events: none;
+  user-select: none;
+}
+
+.waifu-float {
+  animation: waifuBob 5s ease-in-out infinite;
+  filter: drop-shadow(0 4px 22px rgba(124,92,191,0.4));
+}
+
+@keyframes waifuBob {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-7px); }
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 
 @media (max-width: 900px) {

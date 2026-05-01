@@ -552,6 +552,152 @@ function JournalView({ entries, todayJournal, saveStatus, onTodayChange }) {
   )
 }
 
+// ── Waifu Widget ─────────────────────────────────────────────────────────────
+
+function getPupilOffset(eyeX, eyeY, mx, my, max = 2.5) {
+  const dx = mx - eyeX
+  const dy = my - eyeY
+  const dist = Math.sqrt(dx * dx + dy * dy)
+  if (dist === 0) return { x: 0, y: 0 }
+  const s = Math.min(dist / 90, 1)
+  return { x: (dx / dist) * max * s, y: (dy / dist) * max * s }
+}
+
+function WaifuWidget() {
+  const svgRef = useRef(null)
+  const [pupils, setPupils] = useState({ L: { x: 0, y: 0 }, R: { x: 0, y: 0 } })
+  const [tilt, setTilt] = useState(0)
+
+  useEffect(() => {
+    const L = { x: 42, y: 78 }
+    const R = { x: 78, y: 78 }
+
+    const onMove = (e) => {
+      const el = svgRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      // Convert mouse to SVG coordinate space (viewBox 120×150)
+      const mx = ((e.clientX - rect.left) / rect.width) * 120
+      const my = ((e.clientY - rect.top) / rect.height) * 150
+      setPupils({
+        L: getPupilOffset(L.x, L.y, mx, my),
+        R: getPupilOffset(R.x, R.y, mx, my),
+      })
+      // Head tilt follows cursor left/right
+      const norm = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2)
+      setTilt(Math.max(-7, Math.min(7, norm * 8)))
+    }
+
+    window.addEventListener('mousemove', onMove, { passive: true })
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [])
+
+  const lx = (n) => 42 + pupils.L.x + n
+  const ly = (n) => n + pupils.L.y
+  const rx = (n) => 78 + pupils.R.x + n
+  const ry = (n) => n + pupils.R.y
+
+  return (
+    <div className="waifu-widget" aria-hidden="true">
+      <div className="waifu-float">
+        <svg
+          ref={svgRef}
+          width="134"
+          height="160"
+          viewBox="0 0 120 150"
+          fill="none"
+          style={{
+            transform: `rotate(${tilt}deg)`,
+            transformOrigin: '60px 144px',
+            transition: 'transform 0.14s ease',
+          }}
+        >
+          <defs>
+            <radialGradient id="wFace" cx="40%" cy="30%" r="65%">
+              <stop offset="0%" stopColor="#fff4ef"/>
+              <stop offset="100%" stopColor="#fdddd0"/>
+            </radialGradient>
+            <radialGradient id="wIris" cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#c4a0f0"/>
+              <stop offset="55%" stopColor="#7c5cbf"/>
+              <stop offset="100%" stopColor="#4a2d8a"/>
+            </radialGradient>
+            <radialGradient id="wGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#a07ee0" stopOpacity="0.22"/>
+              <stop offset="100%" stopColor="#a07ee0" stopOpacity="0"/>
+            </radialGradient>
+            <clipPath id="lClip"><ellipse cx="42" cy="78" rx="10.5" ry="12.5"/></clipPath>
+            <clipPath id="rClip"><ellipse cx="78" cy="78" rx="10.5" ry="12.5"/></clipPath>
+          </defs>
+
+          {/* Glow halo */}
+          <circle cx="60" cy="76" r="56" fill="url(#wGlow)"/>
+
+          {/* Hair — back layer */}
+          <path d="M22 87 Q17 48 32 28 Q60 8 88 28 Q103 48 98 87 Q92 62 80 50 Q60 38 40 50 Q28 62 22 87Z" fill="#8b5cf6"/>
+
+          {/* Face */}
+          <ellipse cx="60" cy="83" rx="38" ry="42" fill="url(#wFace)"/>
+
+          {/* Ears */}
+          <ellipse cx="22" cy="82" rx="5"   ry="7"   fill="#fdddd0"/>
+          <ellipse cx="22" cy="82" rx="3"   ry="4.5" fill="#f9c4b2"/>
+          <ellipse cx="98" cy="82" rx="5"   ry="7"   fill="#fdddd0"/>
+          <ellipse cx="98" cy="82" rx="3"   ry="4.5" fill="#f9c4b2"/>
+
+          {/* Hair — front bangs */}
+          <path d="M22 87 Q22 54 32 40 Q42 28 50 32 Q56 36 55 44 L52 49 Q48 36 40 39 Q30 43 26 68Z" fill="#7c3aed"/>
+          <path d="M98 87 Q98 54 88 40 Q78 28 70 32 Q64 36 65 44 L68 49 Q72 36 80 39 Q90 43 94 68Z" fill="#7c3aed"/>
+          <path d="M52 30 Q60 24 68 30 Q64 38 60 35 Q56 38 52 30Z" fill="#9333ea"/>
+
+          {/* Ahoge */}
+          <path d="M60 26 Q63 14 58 6 Q56 2 60 1 Q64 2 62 6 Q57 14 61 26Z" fill="#7c3aed"/>
+
+          {/* Left eye — sclera */}
+          <ellipse cx="42" cy="78" rx="11" ry="13" fill="white" opacity="0.95"/>
+          {/* Left iris + pupil, clipped to sclera */}
+          <g clipPath="url(#lClip)">
+            <ellipse cx={lx(0)}   cy={ly(79)} rx="8.5" ry="10" fill="url(#wIris)"/>
+            <ellipse cx={lx(0)}   cy={ly(80)} rx="4"   ry="5"  fill="#150b28"/>
+            <circle  cx={lx(2.5)} cy={ly(76.5)} r="2.5" fill="white" opacity="0.9"/>
+            <circle  cx={lx(-2)}  cy={ly(82)}   r="1"   fill="white" opacity="0.5"/>
+          </g>
+          {/* Left upper lid */}
+          <path d="M30 74 Q42 66 54 74" fill="#1a0f35"/>
+          <path d="M30 74 Q42 67 54 74" fill="none" stroke="#2d1f4e" strokeWidth="1.5" strokeLinecap="round"/>
+
+          {/* Right eye — sclera */}
+          <ellipse cx="78" cy="78" rx="11" ry="13" fill="white" opacity="0.95"/>
+          {/* Right iris + pupil, clipped to sclera */}
+          <g clipPath="url(#rClip)">
+            <ellipse cx={rx(0)}   cy={ry(79)} rx="8.5" ry="10" fill="url(#wIris)"/>
+            <ellipse cx={rx(0)}   cy={ry(80)} rx="4"   ry="5"  fill="#150b28"/>
+            <circle  cx={rx(2.5)} cy={ry(76.5)} r="2.5" fill="white" opacity="0.9"/>
+            <circle  cx={rx(-2)}  cy={ry(82)}   r="1"   fill="white" opacity="0.5"/>
+          </g>
+          {/* Right upper lid */}
+          <path d="M66 74 Q78 66 90 74" fill="#1a0f35"/>
+          <path d="M66 74 Q78 67 90 74" fill="none" stroke="#2d1f4e" strokeWidth="1.5" strokeLinecap="round"/>
+
+          {/* Blush */}
+          <ellipse cx="32" cy="92" rx="9" ry="5" fill="#fda4af" opacity="0.4"/>
+          <ellipse cx="88" cy="92" rx="9" ry="5" fill="#fda4af" opacity="0.4"/>
+
+          {/* Nose */}
+          <path d="M57 98 Q60 101 63 98" fill="none" stroke="#c4997a" strokeWidth="1.2" strokeLinecap="round"/>
+
+          {/* Mouth */}
+          <path d="M51 109 Q60 117 69 109" fill="none" stroke="#c47a8a" strokeWidth="1.8" strokeLinecap="round"/>
+
+          {/* Shoulders + dress */}
+          <path d="M8 152 Q20 130 42 124 Q50 121 60 121 Q70 121 78 124 Q100 130 112 152Z" fill="#7c5cbf"/>
+          <path d="M46 121 Q60 130 74 121 Q71 134 60 136 Q49 134 46 121Z" fill="#a07ee0" opacity="0.55"/>
+        </svg>
+      </div>
+    </div>
+  )
+}
+
 // ── Dashboard App ─────────────────────────────────────────────────────────────
 
 function DashboardApp({ token, onLogout }) {
@@ -683,6 +829,8 @@ function DashboardApp({ token, onLogout }) {
       {editNote !== null && (
         <NoteModal note={editNote} onClose={closeNote} onDelete={deleteNote} />
       )}
+
+      <WaifuWidget />
     </div>
   )
 }
