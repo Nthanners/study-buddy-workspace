@@ -81,43 +81,6 @@ const AmaiMark = ({ className }) => (
   </svg>
 )
 
-// ── Amai Mascot (sidebar chibi) ───────────────────────────────────────────────
-
-const AmaiMascot = () => (
-  <svg width="72" height="80" viewBox="0 0 100 112" fill="none" className="mascot-svg">
-    <defs>
-      <radialGradient id="mFace" cx="40%" cy="30%" r="65%">
-        <stop offset="0%" stopColor="#fff4ef"/>
-        <stop offset="100%" stopColor="#fdddd0"/>
-      </radialGradient>
-    </defs>
-    {/* Hair back */}
-    <path d="M18 58 Q14 32 28 18 Q50 4 72 18 Q86 32 82 58 Q76 38 65 30 Q50 22 35 30 Q24 38 18 58Z" fill="#8b5cf6"/>
-    {/* Face */}
-    <ellipse cx="50" cy="66" rx="30" ry="33" fill="url(#mFace)"/>
-    {/* Ears */}
-    <ellipse cx="20" cy="65" rx="5" ry="7" fill="#fdddd0"/>
-    <ellipse cx="80" cy="65" rx="5" ry="7" fill="#fdddd0"/>
-    {/* Bangs */}
-    <path d="M18 58 Q19 40 27 30 Q36 22 42 26 Q46 30 46 37 L43 40 Q40 30 33 32 Q25 35 22 52Z" fill="#7c3aed"/>
-    <path d="M82 58 Q81 40 73 30 Q64 22 58 26 Q54 30 54 37 L57 40 Q60 30 67 32 Q75 35 78 52Z" fill="#7c3aed"/>
-    {/* Center bang */}
-    <path d="M44 25 Q50 20 56 25 Q52 31 50 28 Q48 31 44 25Z" fill="#9333ea"/>
-    {/* Ahoge */}
-    <path d="M50 22 Q53 12 49 5 Q47 1 50 0 Q53 1 51 5 Q47 12 51 22Z" fill="#7c3aed"/>
-    {/* Happy eyes */}
-    <path d="M32 60 Q40 53 48 60" fill="none" stroke="#2d1f4e" strokeWidth="2.5" strokeLinecap="round"/>
-    <path d="M52 60 Q60 53 68 60" fill="none" stroke="#2d1f4e" strokeWidth="2.5" strokeLinecap="round"/>
-    {/* Blush */}
-    <ellipse cx="34" cy="70" rx="7" ry="4" fill="#fda4af" opacity="0.42"/>
-    <ellipse cx="66" cy="70" rx="7" ry="4" fill="#fda4af" opacity="0.42"/>
-    {/* Mouth */}
-    <path d="M43 79 Q50 85 57 79" fill="none" stroke="#c47a8a" strokeWidth="2" strokeLinecap="round"/>
-    {/* Collar */}
-    <path d="M34 97 Q50 104 66 97 Q62 108 50 110 Q38 108 34 97Z" fill="#7c5cbf" opacity="0.5"/>
-  </svg>
-)
-
 // ── Note Card ─────────────────────────────────────────────────────────────────
 
 function NoteCard({ note, onClick }) {
@@ -241,10 +204,6 @@ function Sidebar({ view, setView, onLogout }) {
           <AmaiMark className="sidebar-brand-mark" />
           <span className="sidebar-brand-name">AMAI</span>
         </div>
-      </div>
-
-      <div className="sidebar-mascot">
-        <AmaiMascot />
       </div>
 
       <nav className="nav-section">
