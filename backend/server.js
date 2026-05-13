@@ -95,7 +95,14 @@ app.get('/api/tasks', requireAuth, (req, res) => res.json(read('tasks')))
 
 app.post('/api/tasks', requireAuth, (req, res) => {
   const tasks = read('tasks')
-  const task = { id: randomUUID(), text: req.body.text || '', done: false, createdAt: new Date().toISOString() }
+  const task = {
+    id: randomUUID(),
+    text: req.body.text || '',
+    done: false,
+    priority: req.body.priority ?? 'normal',
+    dueDate: req.body.dueDate ?? null,
+    createdAt: new Date().toISOString(),
+  }
   tasks.push(task)
   write('tasks', tasks)
   res.json(task)
@@ -133,9 +140,127 @@ app.get('/api/journal/:date', requireAuth, (req, res) => {
 
 app.put('/api/journal/:date', requireAuth, (req, res) => {
   const j = read('journal')
-  j[req.params.date] = { content: req.body.content ?? '', updatedAt: new Date().toISOString() }
+  const cur = j[req.params.date] || {}
+  j[req.params.date] = {
+    ...cur,
+    content: req.body.content ?? cur.content ?? '',
+    mood: req.body.mood !== undefined ? req.body.mood : (cur.mood ?? null),
+    updatedAt: new Date().toISOString(),
+  }
   write('journal', j)
   res.json({ date: req.params.date, ...j[req.params.date] })
+})
+
+// ── Habits ────────────────────────────────────────────────────────────────────
+
+app.get('/api/habits', requireAuth, (req, res) => res.json(read('habits')))
+
+app.post('/api/habits', requireAuth, (req, res) => {
+  const habits = read('habits')
+  const habit = {
+    id: randomUUID(),
+    name: req.body.name || 'New habit',
+    emoji: req.body.emoji || '✨',
+    color: req.body.color || 'lavender',
+    log: {},
+    createdAt: new Date().toISOString(),
+  }
+  habits.push(habit)
+  write('habits', habits)
+  res.json(habit)
+})
+
+app.put('/api/habits/:id', requireAuth, (req, res) => {
+  const habits = read('habits')
+  const idx = habits.findIndex(h => h.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Not found' })
+  habits[idx] = { ...habits[idx], ...req.body, id: habits[idx].id }
+  write('habits', habits)
+  res.json(habits[idx])
+})
+
+app.post('/api/habits/:id/toggle', requireAuth, (req, res) => {
+  const habits = read('habits')
+  const idx = habits.findIndex(h => h.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Not found' })
+  const date = req.body.date || new Date().toISOString().slice(0, 10)
+  const log = { ...(habits[idx].log || {}) }
+  if (log[date]) delete log[date]
+  else log[date] = true
+  habits[idx] = { ...habits[idx], log }
+  write('habits', habits)
+  res.json(habits[idx])
+})
+
+app.delete('/api/habits/:id', requireAuth, (req, res) => {
+  write('habits', read('habits').filter(h => h.id !== req.params.id))
+  res.json({ ok: true })
+})
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+const DEFAULT_SETTINGS = {
+  scene: 'lavender-night',
+  preset: 'lavender-night',
+  sounds: {},
+  music: { url: '', playing: false, volume: 60 },
+  pomodoro: { workMin: 25, breakMin: 5, longBreakMin: 15, cyclesBeforeLong: 4 },
+  weatherCity: '',
+}
+
+app.get('/api/settings', requireAuth, (req, res) => {
+  const s = read('settings')
+  res.json({ ...DEFAULT_SETTINGS, ...(Array.isArray(s) ? {} : s) })
+})
+
+app.put('/api/settings', requireAuth, (req, res) => {
+  const cur = read('settings')
+  const next = { ...DEFAULT_SETTINGS, ...(Array.isArray(cur) ? {} : cur), ...req.body }
+  write('settings', next)
+  res.json(next)
+})
+
+// ── Focus sessions ────────────────────────────────────────────────────────────
+
+app.get('/api/focus-sessions', requireAuth, (req, res) => res.json(read('focus')))
+
+app.post('/api/focus-sessions', requireAuth, (req, res) => {
+  const focus = read('focus')
+  const session = {
+    id: randomUUID(),
+    minutes: req.body.minutes || 0,
+    type: req.body.type || 'work',
+    completedAt: new Date().toISOString(),
+  }
+  focus.push(session)
+  write('focus', focus)
+  res.json(session)
+})
+
+// ── Chats (AI companion conversation history) ─────────────────────────────────
+
+app.get('/api/chats', requireAuth, (req, res) => {
+  const all = read('chats')
+  res.json(Array.isArray(all) ? all.slice(-200) : [])
+})
+
+app.post('/api/chats', requireAuth, (req, res) => {
+  const all = read('chats')
+  const list = Array.isArray(all) ? all : []
+  const msg = {
+    id: randomUUID(),
+    role: req.body.role === 'user' ? 'user' : 'assistant',
+    text: String(req.body.text || ''),
+    time: new Date().toISOString(),
+  }
+  list.push(msg)
+  write('chats', list.slice(-500))
+  res.json(msg)
+})
+
+app.delete('/api/chats', requireAuth, (req, res) => {
+  write('chats', [])
+  res.json({ ok: true })
 })
 
 app.listen(PORT, () => console.log(`✨ AMAI workspace running on http://localhost:${PORT}`))

@@ -25,3 +25,13 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# AI voice model — too large for GitHub (.pth + .index can exceed 100MB)
+Mori Calliope Ai Model/
+*.pth
+*.index
+
+# Python venvs / caches for the TTS bridge
+tts-rvc-server/.venv/
+tts-rvc-server/__pycache__/
+tts-rvc-server/*.pyc
