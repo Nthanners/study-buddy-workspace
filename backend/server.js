@@ -263,4 +263,33 @@ app.delete('/api/chats', requireAuth, (req, res) => {
   res.json({ ok: true })
 })
 
+// ── Smart lights (Adafruit IO) ────────────────────────────────────────────────
+// Publishes ON/OFF to an Adafruit IO feed via REST. Your ESP32's MQTT
+// subscription to the same feed receives the value and toggles the relay.
+
+const AIO_USERNAME = process.env.ADAFRUIT_IO_USERNAME
+const AIO_KEY = process.env.ADAFRUIT_IO_KEY
+const AIO_FEED = process.env.ADAFRUIT_IO_FEED || 'lights'
+
+app.post('/api/lights', requireAuth, async (req, res) => {
+  if (!AIO_USERNAME || !AIO_KEY) {
+    return res.status(503).json({ error: 'Adafruit IO not configured (set ADAFRUIT_IO_USERNAME and ADAFRUIT_IO_KEY in .env)' })
+  }
+  const value = req.body.on ? 'ON' : 'OFF'
+  try {
+    const r = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${AIO_FEED}/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-AIO-Key': AIO_KEY },
+      body: JSON.stringify({ value }),
+    })
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      return res.status(502).json({ error: `Adafruit IO ${r.status}: ${txt.slice(0, 200)}` })
+    }
+    res.json({ ok: true, value })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
 app.listen(PORT, () => console.log(`✨ AMAI workspace running on http://localhost:${PORT}`))

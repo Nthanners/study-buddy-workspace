@@ -172,4 +172,30 @@ app.put('/api/journal/:date', requireAuth, async (req, res) => {
   } catch (e) { res.status(503).json({ error: e.message }) }
 })
 
+// ── Smart lights (Adafruit IO) ────────────────────────────────────────────────
+
+app.post('/api/lights', requireAuth, async (req, res) => {
+  const user = process.env.ADAFRUIT_IO_USERNAME
+  const key = process.env.ADAFRUIT_IO_KEY
+  const feed = process.env.ADAFRUIT_IO_FEED || 'lights'
+  if (!user || !key) {
+    return res.status(503).json({ error: 'Adafruit IO not configured (set ADAFRUIT_IO_USERNAME and ADAFRUIT_IO_KEY)' })
+  }
+  const value = req.body.on ? 'ON' : 'OFF'
+  try {
+    const r = await fetch(`https://io.adafruit.com/api/v2/${user}/feeds/${feed}/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-AIO-Key': key },
+      body: JSON.stringify({ value }),
+    })
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      return res.status(502).json({ error: `Adafruit IO ${r.status}: ${txt.slice(0, 200)}` })
+    }
+    res.json({ ok: true, value })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
 export default app

@@ -1755,6 +1755,15 @@ const CHAT_COMMANDS = [
     ],
   },
   {
+    title: 'Smart Home',
+    items: [
+      'turn on the lights',
+      'turn off the lights',
+      'lights on',
+      'lights off',
+    ],
+  },
+  {
     title: 'Workspace',
     items: [
       'open notes',
@@ -2183,6 +2192,17 @@ function chatScene(text) {
   return { text: `Switching to ${scene.name}~`, action: { type: 'set_scene', payload: { id } } }
 }
 
+function chatLights(text) {
+  if (!/\b(lights?|lamps?)\b/i.test(text)) return null
+  if (/\b(off|out|dark|kill|disable|shut)\b/i.test(text)) {
+    return { text: SAMPLE(["Lights off~ 🌙", "Going dark~", "Lights out~"]), action: { type: 'lights', payload: { on: false } } }
+  }
+  if (/\b(on|up|bright|enable)\b/i.test(text)) {
+    return { text: SAMPLE(["Lights on~ 💡", "Let there be light~", "Brightening up!"]), action: { type: 'lights', payload: { on: true } } }
+  }
+  return null
+}
+
 function chatGoToView(text) {
   const m = text.match(/(?:open|go to|show|take me to)\s+(notes|tasks|journal|habits|home)/i)
   if (!m) return null
@@ -2225,6 +2245,7 @@ function chatGenerate(input, ctx) {
     () => chatCompliment(text),
     () => chatTime(text),
     // Specific commands first
+    () => chatLights(text),
     () => chatPomoCustom(text),
     () => chatNewNote(text),
     () => chatOpenNote(text, ctx),
@@ -2887,8 +2908,23 @@ function DashboardApp({ token, onLogout }) {
       setView(payload.view)
     } else if (type === 'set_scene') {
       updateSettings({ scene: payload.id })
+    } else if (type === 'lights') {
+      try {
+        const r = await api.post('/api/lights', { on: payload.on })
+        if (r && r.error) {
+          setChatMessages(prev => [...prev, {
+            id: `a-${Date.now()}-err`, role: 'assistant',
+            text: `Couldn't reach the lights: ${r.error}`, time: new Date().toISOString(),
+          }])
+        }
+      } catch {
+        setChatMessages(prev => [...prev, {
+          id: `a-${Date.now()}-err`, role: 'assistant',
+          text: "Couldn't reach the light controller — is the backend running?", time: new Date().toISOString(),
+        }])
+      }
     }
-  }, [addTask, toggleTask, deleteTask, updateTask, addHabit, toggleHabit, notes, todayJournal, settings, updateSettings])
+  }, [api, addTask, toggleTask, deleteTask, updateTask, addHabit, toggleHabit, notes, todayJournal, settings, updateSettings])
 
   const sendChat = useCallback(async (text) => {
     const history = chatMessages
