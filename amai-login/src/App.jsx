@@ -1194,79 +1194,6 @@ function BigClock() {
 
 // ── Vibe panel ────────────────────────────────────────────────────────────────
 
-function TTSEndpointConfig({ settings, updateSettings }) {
-  const tts = settings.tts || { url: '', mode: 'json', textParam: 'text', auth: '' }
-  const [testStatus, setTestStatus] = useState('')
-
-  const set = (patch) => updateSettings({ tts: { ...tts, ...patch } })
-
-  const test = async () => {
-    setTestStatus('Testing…')
-    try {
-      await speakViaEndpoint('Hello! This is a test of your custom voice.', tts)
-      setTestStatus('Played ✓')
-    } catch (err) {
-      setTestStatus(`Failed: ${err.message || err}`)
-    }
-    setTimeout(() => setTestStatus(''), 4000)
-  }
-
-  return (
-    <div className="vibe-section">
-      <div className="vibe-section-title">Custom voice (TTS endpoint)</div>
-      <div className="tts-config">
-        <label className="tts-field">
-          <span>Endpoint URL</span>
-          <input
-            type="url"
-            placeholder="http://localhost:5000/api/tts"
-            value={tts.url}
-            onChange={e => set({ url: e.target.value })}
-          />
-        </label>
-        <label className="tts-field">
-          <span>Body / format</span>
-          <select value={tts.mode} onChange={e => set({ mode: e.target.value })}>
-            <option value="json">POST JSON {`{ ${tts.textParam || 'text'} }`}</option>
-            <option value="text">POST raw text body</option>
-            <option value="query">GET ?{tts.textParam || 'text'}=…</option>
-          </select>
-        </label>
-        {tts.mode !== 'text' && (
-          <label className="tts-field">
-            <span>Text param name</span>
-            <input
-              type="text"
-              placeholder="text"
-              value={tts.textParam || 'text'}
-              onChange={e => set({ textParam: e.target.value })}
-            />
-          </label>
-        )}
-        <label className="tts-field">
-          <span>Auth header (optional)</span>
-          <input
-            type="text"
-            placeholder="Bearer xxxx"
-            value={tts.auth}
-            onChange={e => set({ auth: e.target.value })}
-          />
-        </label>
-        <div className="tts-actions">
-          <button type="button" onClick={test} disabled={!tts.url}>Test voice</button>
-          {testStatus && <span className="tts-status">{testStatus}</span>}
-          {tts.url && (
-            <button type="button" className="tts-clear" onClick={() => set({ url: '' })}>Disable</button>
-          )}
-        </div>
-      </div>
-      <div className="vibe-section-hint">
-        Endpoint must accept text and return audio (wav/mp3/ogg). When set + voice is on, AMAI uses your endpoint instead of the browser voice.
-      </div>
-    </div>
-  )
-}
-
 function VibePanel({ open, onClose, settings, updateSettings }) {
   if (!open) return null
   const setSound = (id, vol) => {
@@ -1332,7 +1259,15 @@ function VibePanel({ open, onClose, settings, updateSettings }) {
         />
 
         <div className="vibe-section">
-          <div className="vibe-section-title">Voice & Wake Word</div>
+          <div className="vibe-section-title">Chat & Voice</div>
+          <label className="vibe-toggle">
+            <input
+              type="checkbox"
+              checked={settings.aiChat !== false}
+              onChange={e => updateSettings({ aiChat: e.target.checked })}
+            />
+            <span>Smart AI replies for small talk (free)</span>
+          </label>
           <label className="vibe-toggle">
             <input
               type="checkbox"
@@ -1347,14 +1282,13 @@ function VibePanel({ open, onClose, settings, updateSettings }) {
               checked={!!settings.voiceOn}
               onChange={e => updateSettings({ voiceOn: e.target.checked })}
             />
-            <span>Speak replies aloud (TTS)</span>
+            <span>Speak replies aloud (voice)</span>
           </label>
           <div className="vibe-section-hint">
-            Wake word runs the mic continuously. Browser will show a recording indicator. Chrome / Edge only.
+            AI replies use a free public service (pollinations.ai) only when a message isn't a
+            workspace command. Wake word + voice need Chrome / Edge.
           </div>
         </div>
-
-        <TTSEndpointConfig settings={settings} updateSettings={updateSettings} />
 
         <div className="vibe-section">
           <div className="vibe-section-title">Pomodoro</div>
@@ -1605,6 +1539,54 @@ function MoodPicker({ value, onChange }) {
       ))}
     </div>
   )
+}
+
+// ── Free AI fallback (Pollinations — no API key required) ────────────────────
+
+const AI_SYSTEM_PROMPT =
+  "You are AMAI, a warm, sweet, slightly playful chat companion living in a personal " +
+  "productivity app called Study Buddy. You're talking casually with the one user who owns this space. " +
+  "Keep replies SHORT — 1 to 2 sentences. Be friendly and supportive but not fake or over-cheerful. " +
+  "Occasional soft kaomoji or a single emoji is fine. Don't give long explanations or unsolicited advice — " +
+  "just chat naturally and match the user's energy."
+
+// Detect service/deprecation notices the provider may inject into responses,
+// so they never surface as AMAI's chat reply.
+function isServiceNotice(text) {
+  if (!text) return false
+  const t = text.toLowerCase()
+  return (
+    t.includes('pollinations') ||
+    t.includes('enter.pollinations') ||
+    t.includes('important notice') ||
+    (t.includes('deprecat') && (t.includes('api') || t.includes('migrate'))) ||
+    t.includes('migrate to our new service')
+  )
+}
+
+// Pollinations.ai offers a free, keyless, OpenAI-compatible text endpoint.
+async function callFreeAI(userText, history) {
+  const messages = [
+    { role: 'system', content: AI_SYSTEM_PROMPT },
+    ...history.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+    { role: 'user', content: userText },
+  ]
+  const r = await fetch('https://text.pollinations.ai/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'openai',
+      messages,
+      temperature: 0.85,
+      max_tokens: 120,
+    }),
+  })
+  if (!r.ok) throw new Error(`AI HTTP ${r.status}`)
+  const data = await r.json()
+  const content = data.choices?.[0]?.message?.content?.trim() || null
+  // Drop provider notices — let the caller fall back to a normal reply.
+  if (content && isServiceNotice(content)) return null
+  return content
 }
 
 // ── Chat engine (pattern-matching companion) ─────────────────────────────────
@@ -2232,7 +2214,7 @@ function chatMood(text) {
 
 function chatGenerate(input, ctx) {
   const text = (input || '').trim()
-  if (!text) return { text: SAMPLE(FALLBACKS) }
+  if (!text) return { text: SAMPLE(FALLBACKS), fallback: true }
 
   const handlers = [
     () => /^(hi|hello|hey|yo|hiya|sup|good (?:morning|afternoon|evening|night))\b/i.test(text) ? { text: chatGreeting() } : null,
@@ -2272,7 +2254,7 @@ function chatGenerate(input, ctx) {
     const r = h()
     if (r) return r
   }
-  return { text: SAMPLE(FALLBACKS) }
+  return { text: SAMPLE(FALLBACKS), fallback: true }
 }
 
 // ── Voice hooks (Web Speech API) ──────────────────────────────────────────────
@@ -2382,10 +2364,8 @@ function pickFemaleVoice() {
   return voices.find(v => /^en[-_]/i.test(v.lang)) || voices[0]
 }
 
-// Track current TTS audio element so we can cancel it
-let _ttsAudio = null
-
-function speakBrowser(text) {
+function speak(text, enabled) {
+  if (!enabled || !text) return
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   try {
     window.speechSynthesis.cancel()
@@ -2399,64 +2379,8 @@ function speakBrowser(text) {
   } catch { /* ignore */ }
 }
 
-async function speakViaEndpoint(text, tts) {
-  const headers = {}
-  if (tts.auth) headers.Authorization = tts.auth
-  let url = tts.url
-  let init = { method: 'POST', headers }
-
-  if (tts.mode === 'json') {
-    headers['Content-Type'] = 'application/json'
-    init.body = JSON.stringify({ [tts.textParam || 'text']: text })
-  } else if (tts.mode === 'text') {
-    headers['Content-Type'] = 'text/plain'
-    init.body = text
-  } else if (tts.mode === 'query') {
-    const u = new URL(url)
-    u.searchParams.set(tts.textParam || 'text', text)
-    url = u.toString()
-    init = { method: 'GET', headers }
-  }
-
-  const res = await fetch(url, init)
-  if (!res.ok) throw new Error(`TTS HTTP ${res.status}`)
-  const blob = await res.blob()
-  if (!blob.type.startsWith('audio')) throw new Error(`TTS returned non-audio (${blob.type})`)
-  const audioUrl = URL.createObjectURL(blob)
-
-  if (_ttsAudio) {
-    try { _ttsAudio.pause() } catch { /* */ }
-    _ttsAudio = null
-  }
-  const audio = new Audio(audioUrl)
-  _ttsAudio = audio
-  audio.onended = () => { URL.revokeObjectURL(audioUrl); if (_ttsAudio === audio) _ttsAudio = null }
-  audio.onerror = () => { URL.revokeObjectURL(audioUrl); if (_ttsAudio === audio) _ttsAudio = null }
-  await audio.play()
-}
-
-function speak(text, opts) {
-  // Backwards-compat: support speak(text, true)
-  const o = (typeof opts === 'object' && opts !== null) ? opts : { enabled: !!opts }
-  if (!o.enabled || !text) return
-  const tts = o.tts
-  if (tts && tts.url) {
-    speakViaEndpoint(text, tts).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn('[tts endpoint] failed, falling back to browser TTS:', err)
-      speakBrowser(text)
-    })
-    return
-  }
-  speakBrowser(text)
-}
-
 function stopSpeaking() {
   try { window.speechSynthesis?.cancel() } catch { /* */ }
-  if (_ttsAudio) {
-    try { _ttsAudio.pause() } catch { /* */ }
-    _ttsAudio = null
-  }
 }
 
 // ── Chat Panel ────────────────────────────────────────────────────────────────
@@ -2659,12 +2583,7 @@ const DEFAULT_SETTINGS = {
   pomodoro: { workMin: 25, breakMin: 5, longBreakMin: 15, cyclesBeforeLong: 4 },
   wakeWord: false,
   voiceOn: false,
-  tts: {
-    url: '',           // e.g. http://localhost:5000/api/tts
-    mode: 'json',      // 'json' = POST {text}, 'text' = raw POST, 'query' = GET ?text=
-    textParam: 'text', // body/query key name
-    auth: '',          // optional value for Authorization header
-  },
+  aiChat: true,        // free keyless AI for small-talk fallback
 }
 
 function DashboardApp({ token, onLogout }) {
@@ -2755,7 +2674,7 @@ function DashboardApp({ token, onLogout }) {
     api.get('/api/journal').then(d => d && setJournalEntries(d))
     api.get('/api/habits').then(d => d && setHabits(d))
     api.get('/api/focus-sessions').then(d => d && setFocusSessions(d))
-    api.get('/api/chats').then(d => d && setChatMessages(d))
+    api.get('/api/chats').then(d => d && setChatMessages(d.filter(m => !(m.role === 'assistant' && isServiceNotice(m.text)))))
     api.get('/api/settings').then(d => {
       if (d) {
         setSettings(s => ({ ...s, ...d }))
@@ -2972,18 +2891,38 @@ function DashboardApp({ token, onLogout }) {
   }, [addTask, toggleTask, deleteTask, updateTask, addHabit, toggleHabit, notes, todayJournal, settings, updateSettings])
 
   const sendChat = useCallback(async (text) => {
+    const history = chatMessages
     const userMsg = { id: `u-${Date.now()}`, role: 'user', text, time: new Date().toISOString() }
     setChatMessages(prev => [...prev, userMsg])
     api.post('/api/chats', { role: 'user', text })
 
     const ctx = { tasks, notes, habits, focusSessions, journalEntries, settings, todayMood }
     const reply = chatGenerate(text, ctx)
-    const aiMsg = { id: `a-${Date.now()}`, role: 'assistant', text: reply.text, time: new Date().toISOString() }
-    setChatMessages(prev => [...prev, aiMsg])
-    api.post('/api/chats', { role: 'assistant', text: reply.text })
-    speak(reply.text, { enabled: !!settings.voiceOn, tts: settings.tts })
-    if (reply.action) dispatchChatAction(reply.action)
-  }, [api, tasks, notes, habits, focusSessions, journalEntries, settings, todayMood, dispatchChatAction])
+
+    const finish = (finalText) => {
+      const aiMsg = { id: `a-${Date.now()}`, role: 'assistant', text: finalText, time: new Date().toISOString() }
+      setChatMessages(prev => [...prev.filter(m => m.id !== 'typing'), aiMsg])
+      api.post('/api/chats', { role: 'assistant', text: finalText })
+      speak(finalText, !!settings.voiceOn)
+      if (reply.action) dispatchChatAction(reply.action)
+    }
+
+    // If the pattern matcher punted and AI chat is enabled, use the free LLM for small talk.
+    if (reply.fallback && settings.aiChat !== false) {
+      setChatMessages(prev => [...prev, { id: 'typing', role: 'assistant', text: '…', time: new Date().toISOString() }])
+      try {
+        const aiText = await callFreeAI(text, [...history, userMsg])
+        finish(aiText && aiText.trim() ? aiText.trim() : reply.text)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[ai fallback]', err)
+        finish(reply.text)
+      }
+      return
+    }
+
+    finish(reply.text)
+  }, [api, chatMessages, tasks, notes, habits, focusSessions, journalEntries, settings, todayMood, dispatchChatAction])
 
   const clearChat = useCallback(async () => {
     await api.del('/api/chats')

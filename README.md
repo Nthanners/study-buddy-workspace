@@ -89,39 +89,13 @@ AMAI Website/
 └── .gitignore
 ```
 
-### Custom voice (TTS endpoint)
+### Chat companion (AMAI)
 
-AMAI's spoken replies use the browser's built-in voice by default. Point AMAI at any TTS HTTP endpoint (text in → audio out) to swap in a custom voice.
+The chat companion answers workspace commands instantly with a local pattern-matching engine (add tasks, query habits, start focus, etc. — see the **?** button in chat for the full list). For casual small talk that isn't a command, it falls back to a **free, keyless AI** ([pollinations.ai](https://pollinations.ai)) — no signup, no API key. Toggle it in **Vibe panel → Chat & Voice → "Smart AI replies"** (on by default).
 
-#### Option A — RVC voice model (e.g. the included Moka Akashiya model)
-
-There's an included Python bridge for RVC voice-conversion models. See [`tts-rvc-server/README.md`](tts-rvc-server/README.md) for full setup. TL;DR:
-
-```bash
-cd tts-rvc-server
-pip install -r requirements.txt
-run.bat            # or: python server.py --model "..." --index "..."
-```
-
-Then in AMAI → Vibe panel → **Custom voice (TTS endpoint)**:
-- URL: `http://localhost:5800/tts`
-- Body format: `POST JSON`, Text param: `text`
-- Click **Test voice** to verify.
-
-The bridge uses Microsoft Edge's free neural TTS to generate base speech, then converts it through your RVC model.
-
-#### Option B — Plain TTS server (no RVC)
-
-Any TTS server that accepts text and returns audio works. Examples:
-- **Piper HTTP**: `pip install piper-tts && python -m piper.http_server --model en_US-amy-medium.onnx --port 5000`
-- **Coqui TTS server**: `tts-server --model_name tts_models/multilingual/multi-dataset/xtts_v2 --port 5002`
-- **OpenTTS**: `docker run -it -p 5500:5500 synesthesiam/opentts:en`
-
-Configure the URL, body format, and text-param name in the Vibe panel to match.
-
-#### Behavior
-
-When configured, AMAI's spoken replies use your endpoint instead of the browser voice. If the endpoint fails or is offline, AMAI silently falls back to the browser's built-in TTS so it never goes mute. The endpoint must return audio (`audio/wav`, `audio/mpeg`, `audio/ogg`).
+- **Voice input**: tap the 🎤 in chat (Chrome / Edge — uses the Web Speech API)
+- **Voice output**: toggle "Speak replies aloud" — uses the browser's built-in text-to-speech (prefers a female voice if your OS has one)
+- **Wake word**: toggle "Listen for AMAI" to open chat by saying "AMAI"
 
 ### Ambient sounds — drop-in assets
 
