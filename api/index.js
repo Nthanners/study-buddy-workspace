@@ -172,6 +172,42 @@ app.put('/api/journal/:date', requireAuth, async (req, res) => {
   } catch (e) { res.status(503).json({ error: e.message }) }
 })
 
+// ── AI chat (Groq proxy) ──────────────────────────────────────────────────────
+
+const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant'
+const AI_SYSTEM_PROMPT =
+  "You are AMAI, a warm, sweet, slightly playful chat companion living in a personal " +
+  "productivity app called Study Buddy. You're talking casually with the one user who owns this space. " +
+  "Keep replies SHORT — 1 to 2 sentences. Be friendly and supportive but not fake or over-cheerful. " +
+  "Occasional soft kaomoji or a single emoji is fine. Don't give long explanations or unsolicited advice — " +
+  "just chat naturally and match the user's energy."
+
+app.post('/api/chat', requireAuth, async (req, res) => {
+  if (!GROQ_API_KEY) return res.status(503).json({ error: 'AI not configured' })
+  const history = Array.isArray(req.body.history) ? req.body.history : []
+  const messages = [
+    { role: 'system', content: AI_SYSTEM_PROMPT },
+    ...history.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.text || '') })),
+    { role: 'user', content: String(req.body.text || '') },
+  ]
+  try {
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: JSON.stringify({ model: GROQ_MODEL, messages, max_tokens: 120, temperature: 0.85 }),
+    })
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      return res.status(502).json({ error: `Groq ${r.status}: ${txt.slice(0, 200)}` })
+    }
+    const data = await r.json()
+    res.json({ reply: data.choices?.[0]?.message?.content?.trim() || '' })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
 // ── Smart lights (Adafruit IO) ────────────────────────────────────────────────
 
 app.post('/api/lights', requireAuth, async (req, res) => {

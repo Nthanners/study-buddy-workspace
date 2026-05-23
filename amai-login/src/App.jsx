@@ -3006,14 +3006,18 @@ function DashboardApp({ token, onLogout }) {
     // If the pattern matcher punted and AI chat is enabled, use the free LLM for small talk.
     if (reply.fallback && settings.aiChat !== false) {
       setChatMessages(prev => [...prev, { id: 'typing', role: 'assistant', text: '…', time: new Date().toISOString() }])
+      const ctxHistory = [...history, userMsg]
+      let aiText = null
+      // 1. Prefer the backend Groq proxy (reliable, key stays server-side).
       try {
-        const aiText = await callFreeAI(text, [...history, userMsg])
-        finish(aiText && aiText.trim() ? aiText.trim() : reply.text)
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[ai fallback]', err)
-        finish(reply.text)
+        const r = await api.post('/api/chat', { text, history: ctxHistory.slice(-8) })
+        if (r && r.reply && !isServiceNotice(r.reply)) aiText = r.reply.trim()
+      } catch { /* backend/Groq unavailable — try keyless next */ }
+      // 2. Fall back to the keyless free service.
+      if (!aiText) {
+        try { aiText = await callFreeAI(text, ctxHistory) } catch { /* give up */ }
       }
+      finish(aiText && aiText.trim() ? aiText.trim() : reply.text)
       return
     }
 
