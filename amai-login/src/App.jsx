@@ -1564,8 +1564,12 @@ function isServiceNotice(text) {
   )
 }
 
-// Pollinations.ai offers a free, keyless, OpenAI-compatible text endpoint.
-async function callFreeAI(userText, history) {
+// Pollinations.ai offers a free, keyless text model. We try the OpenAI-style
+// POST endpoint first, then fall back to the simple GET endpoint. A `referrer`
+// tags our app for better anonymous service.
+const POLLI_REFERRER = 'study-buddy-workspace'
+
+async function polliPost(userText, history) {
   const messages = [
     { role: 'system', content: AI_SYSTEM_PROMPT },
     ...history.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
@@ -1579,13 +1583,40 @@ async function callFreeAI(userText, history) {
       messages,
       temperature: 0.85,
       max_tokens: 120,
+      referrer: POLLI_REFERRER,
     }),
   })
   if (!r.ok) throw new Error(`AI HTTP ${r.status}`)
   const data = await r.json()
-  const content = data.choices?.[0]?.message?.content?.trim() || null
-  // Drop provider notices — let the caller fall back to a normal reply.
-  if (content && isServiceNotice(content)) return null
+  return data.choices?.[0]?.message?.content?.trim() || null
+}
+
+async function polliGet(userText, history) {
+  // Fold a little recent context into the prompt for the simple GET endpoint.
+  const ctxLines = history.slice(-4).map(m => `${m.role === 'user' ? 'User' : 'AMAI'}: ${m.text}`).join('\n')
+  const prompt = (ctxLines ? ctxLines + '\n' : '') + `User: ${userText}\nAMAI:`
+  const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`
+    + `?model=openai&referrer=${POLLI_REFERRER}`
+    + `&system=${encodeURIComponent(AI_SYSTEM_PROMPT)}`
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`AI HTTP ${r.status}`)
+  const text = (await r.text()).trim()
+  return text || null
+}
+
+async function callFreeAI(userText, history) {
+  // Try POST, then GET. Skip results that are just provider notices.
+  let content = null
+  try {
+    content = await polliPost(userText, history)
+    if (content && isServiceNotice(content)) content = null
+  } catch { /* try GET next */ }
+  if (!content) {
+    try {
+      content = await polliGet(userText, history)
+      if (content && isServiceNotice(content)) content = null
+    } catch { /* give up */ }
+  }
   return content
 }
 
@@ -1803,6 +1834,32 @@ function chatHowAreYou() {
     "Just here, watching your scene loop. You?",
     "I'm sweet, thank you~ How are *you* doing?",
     "Happy you talked to me~ What's on your mind?",
+  ])
+}
+
+function chatDoingNow() {
+  return SAMPLE([
+    "Just keeping you company~ Watching the scene drift by.",
+    "Hanging out in your workspace, ready whenever you need me.",
+    "Mostly vibing to the lo-fi. What about you?",
+    "Waiting for you to give me something to do~ Tasks? A chat?",
+    "Keeping your little world tidy. You?",
+  ])
+}
+
+function chatAboutYou() {
+  return SAMPLE([
+    "I'm AMAI — your study buddy. I can manage tasks, habits, journals, focus timers, even your lights~",
+    "Just a sweet little companion living in your workspace. Ask me to add tasks, start focus, or just chat.",
+    "I'm AMAI~ Part assistant, part company. Try \"what should I do\" or just talk to me.",
+  ])
+}
+
+function chatBored() {
+  return SAMPLE([
+    "Bored? Let's fix that. Want a focus sprint, or should I suggest a task?",
+    "Mm, restless~ Try \"what should I do\" and I'll pick something.",
+    "Let's do one small thing together. Say \"start focus\" and we go.",
   ])
 }
 
@@ -2238,7 +2295,10 @@ function chatGenerate(input, ctx) {
 
   const handlers = [
     () => /^(hi|hello|hey|yo|hiya|sup|good (?:morning|afternoon|evening|night))\b/i.test(text) ? { text: chatGreeting() } : null,
-    () => /^(how (?:are|r) (?:you|u)|what'?s up|how (?:do )?you doin)/i.test(text) ? { text: chatHowAreYou() } : null,
+    () => /^(how (?:are|r) (?:you|u)|what'?s up|wassup|how (?:do |are |is )?(?:you|things|it going|ya doin)|how('?s| is) it going|you good)/i.test(text) ? { text: chatHowAreYou() } : null,
+    () => /(what (?:are|r) (?:you|u) (?:doing|up to|on)|wyd|whatcha doin|what you doing|you busy|you there|are you there)/i.test(text) ? { text: chatDoingNow() } : null,
+    () => /(who are you|tell me about (?:yourself|you)|what'?s your name|your name)/i.test(text) ? { text: chatAboutYou() } : null,
+    () => /\b(i'?m bored|so bored|nothing to do|entertain me|talk to me)\b/i.test(text) ? { text: chatBored() } : null,
     () => /^(thank|thanks|thx|ty\b)/i.test(text) ? { text: chatThanks() } : null,
     () => chatBye(text),
     () => chatHelp(text),
